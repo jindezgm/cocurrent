@@ -437,13 +437,40 @@ func (e *entry) tryUpdate(tryUpdate func(interface{}) (interface{}, bool)) (bool
 		if atomic.CompareAndSwapPointer(&e.p, p, unsafe.Pointer(&value)) {
 			return true, true
 		}
-		p = atomic.LoadPointer(&e.p)
-		if p == expunged || p == nil {
+		if p = atomic.LoadPointer(&e.p); p == expunged || p == nil {
 			return false, true
 		}
-		value, ok = tryUpdate(*(*interface{})(p))
-		if !ok {
+		if value, ok = tryUpdate(*(*interface{})(p)); !ok {
 			return false, false
 		}
 	}
+}
+
+// Clear map
+func (m *Map) Clear() {
+	m.mu.Lock()
+	m.read.Store(readOnly{})
+	m.dirty, m.misses = nil, 0
+	m.mu.Unlock()
+}
+
+// Ranger define iteratable interface
+type Ranger interface {
+	Len() int
+	Range(func(key, value interface{}) bool)
+}
+
+// Copy data from iteratable container.
+func (m *Map) Copy(r Ranger) {
+	// Copy
+	read := readOnly{m: make(map[interface{}]*entry, r.Len())}
+	r.Range(func(key, value interface{}) bool {
+		read.m[key] = &entry{p: unsafe.Pointer(&value)}
+		return true
+	})
+	// Reset
+	m.mu.Lock()
+	m.read.Store(read)
+	m.dirty, m.misses = nil, 0
+	m.mu.Unlock()
 }
