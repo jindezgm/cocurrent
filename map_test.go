@@ -7,7 +7,9 @@ package concurrent
 
 import (
 	"reflect"
+	"runtime"
 	"sync"
+	"sync/atomic"
 	"testing"
 )
 
@@ -15,41 +17,42 @@ type testMapUpdateValue struct {
 	data []int
 }
 
+type revisionedValue struct {
+	Revision int64
+	Value    interface{}
+}
+
 func TestMapUpdate(t *testing.T) {
+	parallel := runtime.NumCPU()
+	runtime.GOMAXPROCS(parallel)
 	var m Map
 	var wg sync.WaitGroup
-	wg.Add(10)
-	for i := 0; i < 10; i++ {
+	wg.Add(parallel)
+	var count int32
+	for i := 0; i < parallel; i++ {
 		go func(i int) {
-			for j := 0; j < 100; j++ {
-				m.Update("test", func(value interface{}) (interface{}, bool) {
+			for j := i; j < 100; j++ {
+				if m.Update("test", func(value interface{}) (interface{}, bool) {
 					if nil == value {
-						j--
-						return testMapUpdateValue{data: make([]int, 10)}, true
+						return revisionedValue{Revision: 1}, true
 					}
-					old := value.(testMapUpdateValue)
-					new := testMapUpdateValue{data: make([]int, 10)}
-					copy(new.data, old.data)
-					new.data[i]++
-					return new, true
-				})
+					rv := value.(revisionedValue)
+					if rv.Revision == 100 {
+						return revisionedValue{}, false
+					}
+					return revisionedValue{Revision: rv.Revision + 1}, true
+				}) {
+					t.Log("update ok", i, atomic.AddInt32(&count, 1))
+				} else {
+					break
+				}
 			}
 			wg.Done()
 		}(i)
 	}
 	wg.Wait()
-	if value, exist := m.Load("test"); !exist {
-		t.Fatal("value not exist")
-	} else {
-		v := value.(testMapUpdateValue)
-		if len(v.data) != 10 {
-			t.Fatal("invalid data len", len(v.data))
-		}
-		for i := range v.data {
-			if v.data[i] != 100 {
-				t.Fatal("invalid data value", i, v.data[i])
-			}
-		}
+	if count != 100 {
+		t.Fatal(count)
 	}
 }
 
