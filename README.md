@@ -24,7 +24,7 @@ Update keeps calling 'tryUpdate()' to update key 'key' retrying the update until
     }
 ```
 ## QueuedChan
-QueuedChan is a channel with dynamic buffer size. Unlick traditional channel, push is never blocked and the buffer size follows the performance changes of production and consumption.
+QueuedChan is a channel with dynamic buffer size. Unlike traditional channel, push is never blocked and the buffer size follows the performance changes of production and consumption.
 ```go
     // QueuedChan example
     c := concurrent.NewQueuedChan()
@@ -34,7 +34,7 @@ QueuedChan is a channel with dynamic buffer size. Unlick traditional channel, pu
     }
     c.Pop()
     fmt.Println(c.Len())
-    c.Remove(func(i interface) (bool, bool) {
+    c.Remove(func(i interface{}) (bool, bool) {
         if i.(int) == 0 {
             return true, false
         }
