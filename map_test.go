@@ -32,15 +32,15 @@ func TestMapUpdate(t *testing.T) {
 	for i := 0; i < parallel; i++ {
 		go func(i int) {
 			for j := i; j < 100; j++ {
-				if m.Update("test", func(value interface{}) (interface{}, bool) {
+				if m.Update("test", func(value interface{}) (interface{}, int) {
 					if nil == value {
-						return revisionedValue{Revision: 1}, true
+						return revisionedValue{Revision: 1}, +1
 					}
 					rv := value.(revisionedValue)
 					if rv.Revision == 100 {
-						return revisionedValue{}, false
+						return revisionedValue{}, 0
 					}
-					return revisionedValue{Revision: rv.Revision + 1}, true
+					return revisionedValue{Revision: rv.Revision + 1}, +1
 				}) {
 					t.Log("update ok", i, atomic.AddInt32(&count, 1))
 				} else {

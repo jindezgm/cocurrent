@@ -398,17 +398,18 @@ func (m *Map) load(key interface{}) (*entry, bool) {
 }
 
 // Update keeps calling 'tryUpdate()' to update key 'key' retrying the update
-// until success if there is index conflict.
-func (m *Map) Update(key interface{}, tryUpdate func(interface{}) (interface{}, bool)) bool {
+// until success if update conflict. The first return value of tryupdate is the updated value,
+// and the second return value is the update operation: +1 update, 0 unupdate, -1 delete
+func (m *Map) Update(key interface{}, tryUpdate func(interface{}) (interface{}, int)) bool {
 	for {
-		// Get entry and check value exist or not.
+		// Get entry and check value exist or not. If e.p == nil, can be updated through CAS.
 		e, ok := m.load(key)
-		if ok {
-			_, ok = e.load()
+		if ok && atomic.LoadPointer(&e.p) == expunged {
+			ok = false
 		}
 		// If the specified key does not exist, equivalent to m.LoadOrStore.
 		if !ok {
-			if value, ok := tryUpdate(nil); !ok {
+			if value, op := tryUpdate(nil); op == 0 {
 				return false
 			} else if _, loaded := m.LoadOrStore(key, value); !loaded {
 				return true
@@ -422,25 +423,42 @@ func (m *Map) Update(key interface{}, tryUpdate func(interface{}) (interface{}, 
 }
 
 // tryUpdate try update entry value.
-func (e *entry) tryUpdate(tryUpdate func(interface{}) (interface{}, bool)) (bool, bool) {
+func (e *entry) tryUpdate(tryUpdate func(interface{}) (interface{}, int)) (bool, bool) {
 	// Check pointer again.
 	p := atomic.LoadPointer(&e.p)
-	if p == expunged || p == nil {
+	if p == expunged {
 		return false, true
 	}
+	// Get current value.
+	var value interface{}
+	if p != nil {
+		value = *(*interface{})(p)
+	}
 	// Get new value.
-	value, ok := tryUpdate(*(*interface{})(p))
-	if !ok {
+	value, op := tryUpdate(value)
+	if op == 0 {
 		return false, false
 	}
 	for {
-		if atomic.CompareAndSwapPointer(&e.p, p, unsafe.Pointer(&value)) {
+		// If delete operation point to nil, if update operation point to the new value.
+		var p1 unsafe.Pointer
+		if op > 0 {
+			p1 = unsafe.Pointer(&value)
+		}
+		// Update based on last state.
+		if atomic.CompareAndSwapPointer(&e.p, p, p1) {
 			return true, true
 		}
-		if p = atomic.LoadPointer(&e.p); p == expunged || p == nil {
+		// Get current value again.
+		if p = atomic.LoadPointer(&e.p); p == expunged {
 			return false, true
+		} else if p == nil {
+			value = nil
+		} else {
+			value = *(*interface{})(p)
 		}
-		if value, ok = tryUpdate(*(*interface{})(p)); !ok {
+		// Get new value again.
+		if value, op = tryUpdate(value); op == 0 {
 			return false, false
 		}
 	}
