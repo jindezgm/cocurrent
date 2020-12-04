@@ -75,12 +75,17 @@ func (c *QueuedChan) Len() int { return int(atomic.LoadInt32(&c.len)) }
 func (c *QueuedChan) Remove(f func(i interface{}) (ok bool, cont bool)) int {
 	// Send remove command.
 	r := make(chan int)
-	c.ctrlc <- queuedChanRemoveCmd{f: f, r: r}
+	select {
+	case c.ctrlc <- queuedChanRemoveCmd{f: f, r: r}:
+	case <-c.close:
+		return 0
+	}
+
 	// Waiting for result.
 	select {
 	case n := <-r:
 		return n
-	case <-c.done:
+	case <-c.close:
 		return 0
 	}
 }
