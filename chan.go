@@ -47,13 +47,25 @@ type queuedChanRemoveCmd struct {
 func (c *QueuedChan) PushChan() chan<- interface{} { return c.pushc }
 
 // Push object into channel.
-func (c *QueuedChan) Push(i interface{}) { c.pushc <- i }
+func (c *QueuedChan) Push(i interface{}) {
+	select {
+	case c.pushc <- i:
+	case <-c.close:
+	}
+}
 
 // PopChan get pop object channel.
 func (c *QueuedChan) PopChan() <-chan interface{} { return c.popc }
 
 // Pop object from channel.
-func (c *QueuedChan) Pop() interface{} { return <-c.popc }
+func (c *QueuedChan) Pop() interface{} {
+	select {
+	case i := <-c.popc:
+		return i
+	case <-c.close:
+		return nil
+	}
+}
 
 // Len get buffered object count.
 func (c *QueuedChan) Len() int { return int(atomic.LoadInt32(&c.len)) }
