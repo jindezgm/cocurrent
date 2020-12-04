@@ -36,7 +36,7 @@ type NestedMap sync.Map
 
 // Load returns the value stored in the map for a key, or nil if no value is present.
 func (nm *NestedMap) Load(keys ...interface{}) (interface{}, error) {
-	keys = nm.convertKeys(keys)
+	keys = nm.convertKeys(keys...)
 	m, err := nm.search(keys[:len(keys)-1]...)
 	if nil != err {
 		return nil, err
@@ -54,7 +54,7 @@ func (nm *NestedMap) Load(keys ...interface{}) (interface{}, error) {
 
 // Store sets the value for keys.
 func (nm *NestedMap) Store(value interface{}, keys ...interface{}) error {
-	keys = nm.convertKeys(keys)
+	keys = nm.convertKeys(keys...)
 	m, err := nm.searchOrCreate(keys[:len(keys)-1]...)
 	if nil != err {
 		return err
@@ -68,7 +68,7 @@ func (nm *NestedMap) Store(value interface{}, keys ...interface{}) error {
 // Otherwise, it stores and returns the given value.
 // The loaded result is true if the value was loaded, false if stored.
 func (nm *NestedMap) LoadOrStore(value interface{}, keys ...interface{}) (actual interface{}, loaded bool, err error) {
-	keys = nm.convertKeys(keys)
+	keys = nm.convertKeys(keys...)
 	m, err := nm.searchOrCreate(keys[:len(keys)-1]...)
 	if nil != err {
 		return nil, false, err
@@ -80,7 +80,7 @@ func (nm *NestedMap) LoadOrStore(value interface{}, keys ...interface{}) (actual
 
 // Delete deletes the value for keys.
 func (nm *NestedMap) Delete(keys ...interface{}) error {
-	keys = nm.convertKeys(keys)
+	keys = nm.convertKeys(keys...)
 	m, err := nm.search(keys[:len(keys)-1]...)
 	if nil != err {
 		return err
@@ -92,7 +92,7 @@ func (nm *NestedMap) Delete(keys ...interface{}) error {
 
 // Range calls f sequentially for each key and value present in the map. If f returns false, range stops the iteration.
 func (nm *NestedMap) Range(f func(keys []interface{}, value interface{}) bool, keys ...interface{}) error {
-	keys = nm.convertKeys(keys)
+	keys = nm.convertKeys(keys...)
 	m, err := nm.search(keys...)
 	if nil != err {
 		return err
