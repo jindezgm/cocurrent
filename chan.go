@@ -94,17 +94,28 @@ func (c *QueuedChan) Remove(f func(i interface{}) (ok bool, cont bool)) int {
 func (c *QueuedChan) Close() {
 	close(c.close)
 	<-c.done
+
+	// Close pop channel avoid reader blocked.
+	close(c.popc)
+}
+
+// CloseAndFlush close channel and flush buffered objects.
+func (c *QueuedChan) CloseAndFlush() {
+	close(c.close)
+	<-c.done
+
+	// Flush buffered objects.
+	c.flush()
+
+	// Close pop channel avoid reader blocked.
+	close(c.popc)
 }
 
 // run get object from push channel and push back into list,
 // pop front object from list and output by pop channel.
 func (c *QueuedChan) run() {
-	defer func() {
-		// Close pop channel avoid reader blocked.
-		close(c.popc)
-		// Notify close channel coroutine.
-		close(c.done)
-	}()
+	// Notify close channel coroutine.
+	defer close(c.done)
 
 	for {
 		var elem *list.Element
@@ -132,6 +143,25 @@ func (c *QueuedChan) run() {
 		}
 		// Update channel length
 		atomic.StoreInt32(&c.len, int32(c.List.Len()))
+	}
+}
+
+// flush flush the value buffered in the queue.
+func (c *QueuedChan) flush() {
+	// Flush queue.
+	for elem := c.Front(); nil != elem; elem = c.Front() {
+		c.popc <- elem.Value
+		c.List.Remove(elem)
+	}
+
+	// Flush input channel.
+	for {
+		select {
+		case i := <-c.pushc:
+			c.popc <- i
+		default:
+			return
+		}
 	}
 }
 
