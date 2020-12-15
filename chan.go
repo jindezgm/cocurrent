@@ -153,16 +153,6 @@ func (c *QueuedChan) flush() {
 		c.popc <- elem.Value
 		c.List.Remove(elem)
 	}
-
-	// Flush input channel.
-	for {
-		select {
-		case i := <-c.pushc:
-			c.popc <- i
-		default:
-			return
-		}
-	}
 }
 
 // control channel.
